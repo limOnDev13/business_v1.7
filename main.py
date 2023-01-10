@@ -485,14 +485,14 @@ class Opimization():
 
         self._dllArrayFish = WinDLL('D:/github/business_v1.3/Project1/x64/Debug/dllArrayFish.dll')
 
-    def calculate_optimized_amount_fish_in_commercial_pool(self, square, startMass, mass, startAmount, step):
+    def calculate_optimized_amount_fish_in_commercial_pool(self, square, mass, startAmount, step):
         flagNumber = 0
         amountFish = startAmount
         amountGrowthDays = 0
         amountDaysBeforeLimit = 0
 
         while (flagNumber >= 0):
-            pool = Pool(square, startMass)
+            pool = Pool(square)
             pool.add_new_biomass(amountFish, mass, 0, date.date.today())
             x = pool.calculate_difference_between_number_growth_days_and_limit_days(amountFish)
             flagNumber = x[0]
@@ -1314,7 +1314,7 @@ class CWSD():
     def __init__(self, masses, mainVolumeFish, amountModules=2, amountPools=4, square=10,
                  correctionFactor=2,feedPrice=260, salary=30000,
                  amountWorkers=2, equipmentCapacity=5.5, costElectricity=3.17, rent=100000,
-                 costCWSD=3000000, principalDebt=500000, annualPercentage=15.0, amountMonth=12, grant=5000000,
+                 costCWSD=3000000, principalDebt=850000, annualPercentage=15.0, amountMonth=12, grant=5000000,
                  fishPrice=850, massCommercialFish=400, singleVolumeFish=100, maximumPlantingDensity=40,
                  financialCushion=300000, depreciationLimit=2000000, amountAdaptionDays=60,
                  minCorrectonFactor=0.5, maxCorrectionFactor=1.0):
@@ -1592,9 +1592,10 @@ class CWSD():
             endMonth = calculate_end_date_of_month(startMonth)
 
     def find_minimal_budget(self):
-        # item = [конец этого месяца, предыдущий бюджет, траты на мальков,
-        #         на корм, на зарплату, на аренду, на электричество, выручка, текущий бюджет,
-        #         резерв на амортизацию, резерв на расширение]
+        # item = [конец этого месяца, средства на резерве для расходов с предыдущего месяца,
+        #         #         траты на малька, на корм, на зарплату, на ренту, на электричество, месячная плата по кредиту
+        #         #         суммарные расходы, выручка, бюджет, обновленный резерв на траты,
+        #         #         обновленный резерв на амортизацию, обновленный резерв на расширение, зарплата семье в этом месяце]
         result = [self.resultBusinessPlan[0][10], self.resultBusinessPlan[0][0]]
         for i in range(len(self.resultBusinessPlan)):
             if (result[0] > self.resultBusinessPlan[i][10]):
@@ -2099,19 +2100,13 @@ class Business():
 
         if (key == 'expansionReserve'):
             for i in range(self.amount_cwsd):
-                print(i, ' cwsd, expansionReserve, было: ', self.cwsds[i].expansionReserve)
                 self.cwsds[i].expansionReserve -= x[i]
-                print(i, ' cwsd, expansionReserve, стало: ', self.cwsds[i].expansionReserve)
         elif (key == 'depreciationReserve'):
             for i in range(self.amount_cwsd):
-                print(i, ' cwsd, depreciationReserve, было: ', self.cwsds[i].depreciationReserve)
                 self.cwsds[i].depreciationReserve -= x[i]
-                print(i, ' cwsd, depreciationReserve, было: ', self.cwsds[i].depreciationReserve)
         elif (key == 'expensesReserve'):
             for i in range(self.amount_cwsd):
-                print(i, ' cwsd, expensesReserve, было: ', self.cwsds[i].expensesReserve)
                 self.cwsds[i].expensesReserve -= x[i]
-                print(i, ' cwsd, expensesReserve, было: ', self.cwsds[i].expensesReserve)
 
     def _controller_of_all_reserves_for_tax(self, tax, familyProfitInThisMonth):
         neededMoney = tax
@@ -2208,6 +2203,7 @@ class Business():
 
             if (taxInThisMonth > 0):
                 taxResult = self._controller_of_all_reserves_for_tax(taxInThisMonth, currentFamilyProfit)
+                currentExpenses += taxInThisMonth
                 if (taxResult[0]):
                     currentFamilyProfit = taxResult[1]
                 else:
@@ -2582,6 +2578,151 @@ class Business():
             print('==================================================================================================')
             print()
 
+    def result_business(self):
+        currentBudget = self.cwsds[0].grant + self.cwsds[0].principalDebt - self.cwsds[0].costCWSD
+        result = [True, currentBudget]
+        for i in range(len(self.totalBusinessPlan)):
+            '''
+            self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
+                                           currentRevenue, self.totalRevenue, self.totalExpensesReserve,
+                                           self.totalDepreciationReserve, self.totalExpansionReserve,
+                                           currentFamilyProfit, self.totalFamilyProfit, taxInThisMonth])
+            '''
+            currentBudget -= self.totalBusinessPlan[i][1]
+            if (currentBudget < 0):
+                result = [False, 0.0, self.totalBusinessPlan[i][0]]
+                break
+            else:
+                currentBudget += self.totalBusinessPlan[i][3]
+                result = [True, currentBudget]
+
+        return result
+
+class NewOptimization():
+    def calculate_optimized_amount_fish_in_commercial_pool(self, square, mass,
+                                                           startAmount, step, amountTests):
+        flagNumber = 0
+        amountFish = startAmount
+        amountGrowthDays = 0
+        amountDaysBeforeLimit = 0
+        result = 0
+
+        for i in range(amountTests):
+            print(i, ' тест')
+            while (flagNumber >= 0):
+                pool = Pool(square)
+                pool.add_new_biomass(amountFish, mass, 0, date.date.today())
+                x = pool.calculate_difference_between_number_growth_days_and_limit_days(amountFish)
+                flagNumber = x[0]
+                if (flagNumber >= 0):
+                    amountFish += step
+                    amountGrowthDays = x[1]
+                    amountDaysBeforeLimit = x[2]
+
+            result += amountFish
+
+        result /= amountTests
+        result = (int(result / 10)) * 10
+
+        return result
+
+    def calculate_cost_launche_new_cwsd(self, amountTests, credit, amountCreditMonth, startMasses, mainVolumeFish,
+                                        startDate, endDate, reserve, deltaMass, maxMass):
+        averageResult = 0
+        minResult = 100000000
+        maxResult = 0
+
+        for i in range(amountTests):
+            print(i, ' тест')
+            newCWSD = CWSD(startMasses, mainVolumeFish)
+            '''
+            elif (x[0] == 10):
+                self.principalDebt = x[1]
+            elif (x[0] == 11):
+                self.annualPercentage = x[1]
+            elif (x[0] == 12):
+                self.amountMonth = x[1]
+            '''
+            changeCreditParameters = [[10, credit], [12, amountCreditMonth]]
+            newCWSD.work_cwsd_with_correction_factor(startDate, endDate, reserve, deltaMass, 20, maxMass)
+            x = newCWSD.calculate_cost_launching_new_cwsd(startDate)
+            averageResult += x
+            if (x < minResult):
+                minResult = x
+            if (x > maxResult):
+                maxResult = x
+        averageResult /= amountTests
+
+        return [minResult, averageResult, maxResult]
+
+
+    def total_optimization(self, minCredit, stepCredit, maxCredit, minMaxMass, stepMaxMass, maxMaxMass,
+                          minDelta, stepDelta, maxDelta, minAmountMonth, stepAmountMonth, maxAmountMonth,
+                          square, mass, startAmount, step, minMass,
+                          amountTests, startMasses, reserve, startDate, endDate):
+        print('Начат поиск оптимального количества рыбы в коммерческом бассейне')
+        amountFishInCommercialPool = self.calculate_optimized_amount_fish_in_commercial_pool(square,
+                                                                                             mass, startAmount, step,
+                                                                                             amountTests)
+        print('В среднем лучше зарыблять ', amountFishInCommercialPool, ' штук в коммерческий бассейн')
+
+        print('Начат поиск оптимальных условий бизнеса')
+        maxMinIncome = 0
+        bestParameters = [minMaxMass, minDelta, minCredit, minAmountMonth]
+        credit = minCredit
+        while (credit <= maxCredit):
+            amountCreditMonth = minAmountMonth
+            while (amountCreditMonth <= maxAmountMonth):
+                maxMass = minMaxMass
+                while (maxMass <= maxMaxMass):
+                    deltaMass = minDelta
+                    while (deltaMass <= maxDelta):
+                        print('credit = ', credit, ', amountCreditMonth = ', amountCreditMonth,
+                              ', maxMass = ', maxMass, ', deltaMass = ', deltaMass)
+
+                        minIncome = 999999999
+                        flag = True
+                        for i in range(amountTests):
+                            print(i, ' тест')
+                            newBusiness = Business(startMasses, amountFishInCommercialPool)
+                            newBusiness.main_script1_with_correction_factor_and_with_tax(startDate, endDate, reserve,
+                                                                                         deltaMass, 20, maxMass,
+                                                                                         5000000,
+                                                                                         200000,
+                                                                                         amountFishInCommercialPool,
+                                                                                         100000, 200000)
+                            resultBusiness = newBusiness.result_business()
+
+                            if (resultBusiness[0]):
+                                if (minIncome > resultBusiness[1]):
+                                    minIncome = resultBusiness[1]
+                            else:
+                                flag = False
+                                break
+
+                        if (flag):
+                            print('Такие параметры подходят')
+                            print('Минимальный доход - траты бизнеса за все время = ',
+                                  minIncome)
+                            if (maxMinIncome < minIncome):
+                                maxMinIncome = minIncome
+                                bestParameters = [maxMass, deltaMass, credit, amountCreditMonth]
+                        else:
+                            print('Такие параметры не подходят, мы можем уйти в минус')
+                            print('Ищем другие параметры')
+                        print()
+
+                        deltaMass += stepDelta
+                    maxMass += stepMaxMass
+                amountCreditMonth += stepAmountMonth
+            credit += stepCredit
+
+        print('Оптимальные условия:')
+        print('credit = ', bestParameters[2], ', amountCreditMonth = ', bestParameters[3],
+              ', maxMass = ', bestParameters[0], ', deltaMass = ', bestParameters[1])
+        print('Минимальный доход от бизнеса при оптимальных параметрах: ', maxMinIncome)
+
+        return bestParameters
 
 
 masses = [100, 50, 30, 20]
@@ -2599,7 +2740,7 @@ cwsdCapacity = 5.5
 electricityCost = 3.17
 rent = 100000
 costCWSD = 3000000
-credit = 750000
+credit = 850000
 annualPercentage = 15
 amountCreditMonth = 36
 grant = 5000000
@@ -2613,7 +2754,6 @@ opt = Opimization(masses, 730, amountModules, amountPools,
                   grant, fishPrice, massCommercialFish)
 
 optimalQuantity = opt.calculate_optimized_amount_fish_in_commercial_pool(poolSquare,
-                                                                         masses[amountPools - 1],
                                                                          masses[amountPools - 1],
                                                                          10, 10)
 mainVolumeFish = optimalQuantity[0]
@@ -2671,8 +2811,18 @@ if (newCWSD.howMuchIsMissing > 0):
 else:
     print('Все ок, мы не ушли в минус)))')
 '''
+
 business = Business(masses, mainVolumeFish)
 business.main_script1_with_correction_factor_and_with_tax(startDate, endDate, reserve, deltaMass, minMass,
                                                           maxMass, 4600000, 200000, mainVolumeFish,
                                                           100000, 200000)
 business.print_detailed_info()
+'''
+newOptimization = NewOptimization()
+result = newOptimization.total_optimization(500000, 50000, 1000000, 100, 10, 350,
+                                            50, 20, 250, 12,
+                                            6, 36,
+                                            10, 100, 10, 10, 20,
+                                            10, masses, reserve, startDate, endDate)
+print(result)
+'''
